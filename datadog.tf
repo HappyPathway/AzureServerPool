@@ -1,43 +1,30 @@
-resource "null_resource" "datadog" {
-  count = "${var.datadog_monitor ? var.count : 0}"
-  # Changes to any instance of the cluster requires re-provisioning
-  triggers {
-    cluster_instance_ids = "${join(",", azurerm_virtual_machine.avm.*.id)}"
+# Create a new Datadog monitor
+resource "datadog_monitor" "foo" {
+  name               = "${var.service_name}-CPU"
+  type               = "metric alert"
+  message            = "Monitor triggered. Notify: @pagerduty-${var.service_name}"
+  escalation_message = "Ruh Roh!! We're in trouble! message @pagerduty-${var.service_name}"
+
+  query = "avg:system.load.1{service:${var.service_name}} by {host}"
+
+  thresholds {
+    ok                = 0
+    warning           = 2
+    warning_recovery  = 1
+    critical          = 0.10
+    critical_recovery = 3
   }
 
+  notify_no_data    = false
+  renotify_interval = 60
 
+  notify_audit = false
+  timeout_h    = 60
+  include_tags = true
 
-  # Bootstrap script can run on any instance of the cluster
-  # So we just choose the first in this case
-  connection {
-      type     = "ssh"
-      host     = "${element(azurerm_public_ip.api.*.ip_address, count.index)}"
-      user     = "${var.system_user}"
-      password = "${var.system_password}"
-  }
-  
-  provisioner "file" {
-      source = "files/requirements.txt"
-      destination = "/tmp/requirements.txt"
+  silenced {
+    "*" = 0
   }
 
-  provisioner "remote-exec" {
-      inline = [
-          "sudo apt-get update",
-          "sudo apt-get install -y python-pip",
-          "sudo pip install -r /tmp/requirements.txt"
-      ]
-  }
-  provisioner "file" {
-    source  = "playbooks"
-    destination = "/tmp/playbooks"
-  }
-
-  provisioner "remote-exec" {
-    inline = [
-      "curl ${var.ddog_install_script} | sudo DD_API_KEY=${var.datadog_key} bash",
-      "sudo ansible-playbook /tmp/playbooks/datadog_agent.yaml -e datadog_api_key=${var.datadog_key} -e service_name=${var.service_name} -e env=${var.env}",
-      "rm -rf /tmp/playbooks"
-    ]
-  }
+  tags = ["service:${var.service_name}", "environment:${var.env}"]
 }
