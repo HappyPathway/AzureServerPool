@@ -1,13 +1,3 @@
-resource "azurerm_managed_disk" "amd" {
-  name                 = "${var.service_name}-${var.env}-amd${format("%03d", count.index + 1)}"
-  location             = "${var.location}"
-  resource_group_name  = "${azurerm_resource_group.arg.name}"
-  storage_account_type = "Standard_LRS"
-  create_option        = "Empty"
-  disk_size_gb         = "${var.disk_size}"
-  count                = "${var.count}"
-}
-
 resource "azurerm_virtual_machine" "avm" {
   name                  = "${var.service_name}-${var.env}-avm${format("%03d", count.index + 1)}"
   location              = "${azurerm_resource_group.arg.location}"
@@ -67,10 +57,6 @@ resource "azurerm_virtual_machine" "avm" {
 
   os_profile_linux_config {
     disable_password_authentication = false
-    ssh_keys {
-      path     = "/home/${var.system_user}/.ssh/authorized_keys"
-      key_data = "${file("./keys/terraform.pub")}"
-    }
   }
 
   tags {
@@ -79,28 +65,3 @@ resource "azurerm_virtual_machine" "avm" {
   }
 }
 
-resource "azurerm_public_ip" "api" {
-  name                         = "${var.service_name}-${var.env}-ip${format("%03d", count.index + 1)}"
-  location                     = "${var.location}"
-  resource_group_name  = "${azurerm_resource_group.arg.name}"
-  public_ip_address_allocation = "Dynamic"
-  idle_timeout_in_minutes      = 30
-  count = "${var.count}"
-  tags {
-    environment = "${var.env}"
-    service = "${var.service_name}"
-  }
-}
-
-resource "azurerm_network_interface" "ani" {
-  name                = "${var.service_name}-${var.env}-ani${format("%03d", count.index + 1)}"
-  location            = "${var.location}"
-  resource_group_name  = "${azurerm_resource_group.arg.name}"
-  count = "${var.count}"
-  ip_configuration {
-    name                          = "${var.service_name}-ani${format("%03d", count.index + 1)}"
-    subnet_id                     = "${azurerm_subnet.asn.id}"
-    private_ip_address_allocation = "dynamic"
-    public_ip_address_id          = "${element(azurerm_public_ip.api.*.id, count.index)}"
-  }
-}
